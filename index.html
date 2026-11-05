@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#14324a">
+  <title>Gesture Speaker | संकेत बोलने वाला ऐप</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #17324a;
+      --muted: #5b7184;
+      --blue: #2368d1;
+      --blue-dark: #174da3;
+      --paper: #f3f7fb;
+      --line: #dce6ef;
+      --green: #1d7a5b;
+      --red: #b33c4a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      padding: 20px;
+      color: var(--ink);
+      background: radial-gradient(circle at top left, #e3f4ff, transparent 38%), var(--paper);
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+    button { font: inherit; }
+    .app { max-width: 980px; margin: 0 auto; }
+    header { margin: 4px 0 18px; }
+    h1 { margin: 0; font-size: clamp(1.7rem, 5vw, 2.45rem); letter-spacing: -.03em; }
+    .subtitle { margin: 7px 0 0; color: var(--muted); line-height: 1.5; }
+    .badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 8px 12px; border-radius: 999px;
+      color: #14558e; background: #e2f1ff; font-size: .9rem; font-weight: 700;
+    }
+    .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 16px 0; }
+    .toggle {
+      display: inline-flex; align-items: center; gap: 8px;
+      min-height: 42px; padding: 0 12px; border: 1px solid var(--line);
+      border-radius: 12px; background: #fff; font-weight: 650;
+    }
+    .toggle input { width: 18px; height: 18px; accent-color: var(--blue); }
+    .layout { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(280px, .85fr); gap: 16px; }
+    .card {
+      padding: 18px; border: 1px solid var(--line); border-radius: 20px;
+      background: rgba(255,255,255,.94); box-shadow: 0 12px 32px rgba(30,64,96,.08);
+    }
+    .camera-frame {
+      overflow: hidden; display: grid; place-items: center; min-height: 250px;
+      aspect-ratio: 1 / 1; border-radius: 16px; background: #eaf0f5;
+    }
+    video, .photo-preview {
+      display: block; width: 100%; height: 100%; max-height: 540px; object-fit: contain;
+    }
+    video[hidden], .photo-preview[hidden] { display: none; }
+    .camera-placeholder { padding: 24px; color: var(--muted); text-align: center; }
+    .buttons { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+    button {
+      min-height: 46px; padding: 10px 16px; border: 0; border-radius: 12px;
+      color: #fff; background: var(--blue); font-weight: 750; cursor: pointer;
+      transition: transform .12s ease, background .12s ease;
+    }
+    button:hover:not(:disabled) { background: var(--blue-dark); transform: translateY(-1px); }
+    button.secondary { color: var(--ink); background: #e8eff6; }
+    button.secondary:hover:not(:disabled) { background: #dce7f0; }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    .status { min-height: 26px; margin: 12px 0 0; color: var(--muted); font-size: .94rem; }
+    .status.error { color: var(--red); font-weight: 700; }
+    .status.good { color: var(--green); font-weight: 700; }
+    h2 { margin: 0 0 12px; font-size: 1.25rem; }
+    .gesture {
+      min-height: 54px; margin: 4px 0 8px; font-size: 1.75rem;
+      font-weight: 850; overflow-wrap: anywhere;
+    }
+    .confidence-row { display: flex; justify-content: space-between; color: var(--muted); font-size: .9rem; }
+    .bar { height: 9px; overflow: hidden; margin: 7px 0 18px; border-radius: 99px; background: #e7edf3; }
+    .bar-fill { width: 0; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #39a87c, #3d9ce4); transition: width .2s ease; }
+    .phrase { margin: 10px 0; padding: 12px 14px; border-radius: 14px; background: #f4f8fb; }
+    .phrase span { display: block; margin-bottom: 4px; color: var(--muted); font-size: .82rem; font-weight: 750; text-transform: uppercase; letter-spacing: .05em; }
+    .phrase strong { font-size: 1.12rem; }
+    .tip { margin: 16px 0 0; color: var(--muted); font-size: .9rem; line-height: 1.5; }
+    footer { padding: 14px 4px 4px; color: var(--muted); font-size: .88rem; line-height: 1.5; }
+    @media (max-width: 760px) {
+      body { padding: 14px; }
+      .layout { grid-template-columns: 1fr; }
+      .card { padding: 14px; }
+      .camera-frame { min-height: 220px; }
+      .buttons button { flex: 1 1 150px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header>
+      <span class="badge">📷 4 trained signs · 4 trained gestures</span>
+      <h1>Gesture Speaker <span lang="hi">| संकेत बोलने वाला ऐप</span></h1>
+      <p class="subtitle">Use the camera or choose a photo. The result speaks in English, then Hindi. / कैमरा चलाएँ या फोटो चुनें। परिणाम पहले English, फिर हिन्दी में बोलेगा।</p>
+    </header>
+
+    <section class="toolbar" aria-label="Speech settings">
+      <label class="toggle" for="auto-speak">
+        <input id="auto-speak" type="checkbox" checked>
+        <span>Speak automatically / अपने आप बोलें</span>
+      </label>
+      <span class="subtitle">English first, Hindi next / पहले English, फिर हिन्दी</span>
+    </section>
+
+    <div class="layout">
+      <section class="card" aria-labelledby="camera-title">
+        <h2 id="camera-title">Live or photo / कैमरा या फोटो</h2>
+        <div class="camera-frame">
+          <video id="camera" playsinline muted autoplay hidden></video>
+          <img id="photo-preview" class="photo-preview" alt="Selected gesture photo" hidden>
+          <div id="camera-placeholder" class="camera-placeholder">Choose Live translation or upload a photo. / Live translation चुनें या फोटो अपलोड करें।</div>
+        </div>
+        <div class="buttons">
+          <button id="start-button" type="button">Live translation / लाइव अनुवाद</button>
+          <button id="upload-button" class="secondary" type="button">Upload photo / फोटो अपलोड करें</button>
+          <input id="photo-input" type="file" accept="image/*" hidden>
+          <button id="stop-button" class="secondary" type="button" disabled>Stop live / लाइव रोकें</button>
+        </div>
+        <p id="status" class="status" role="status" aria-live="polite">Ready. / तैयार।</p>
+        <p class="tip">The selected photo is analyzed in this browser. For camera use, open this page on HTTPS or localhost. / चुनी हुई फोटो इसी browser में जाँची जाती है। कैमरे के लिए पेज HTTPS या localhost पर खोलें।</p>
+      </section>
+
+      <section class="card" aria-labelledby="result-title">
+        <h2 id="result-title">Prediction / पहचान</h2>
+        <div id="gesture-name" class="gesture" aria-live="polite">Show or choose a gesture / संकेत दिखाएँ या फोटो चुनें</div>
+        <div class="confidence-row"><span>Confidence / भरोसे का स्तर</span><strong id="confidence">—</strong></div>
+        <div class="bar" aria-hidden="true"><div id="confidence-bar" class="bar-fill"></div></div>
+        <div class="phrase"><span>English</span><strong id="english-text">Waiting for a gesture…</strong></div>
+        <div class="phrase"><span>हिन्दी</span><strong id="hindi-text" lang="hi">संकेत की प्रतीक्षा…</strong></div>
+        <div class="buttons">
+          <button id="speak-button" type="button" disabled>Speak again / फिर से बोलें</button>
+          <button id="voice-test-button" class="secondary" type="button">Test both voices / दोनों आवाज़ जाँचें</button>
+        </div>
+      </section>
+    </div>
+
+    <footer>
+      Gestures in this model: HELLO, PRANAM, LETS GO, NO. Hold a live gesture steady for a moment. / इस मॉडल में संकेत: HELLO, PRANAM, LETS GO, NO। कैमरे के सामने संकेत स्थिर रखें।
+    </footer>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.7.4/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8.3/dist/teachablemachine-image.min.js"></script>
+  <script>
+    // This is the model link you shared. Teachable Machine adds model.json and metadata.json.
+    const MODEL_URL = "https://teachablemachine.withgoogle.com/models/4b1iN6feQ/";
+
+    // These labels match the model metadata exactly.
+    const MESSAGES = {
+      "HELLO":   { english: "Hello / Hi", hindi: "नमस्ते" },
+      "PRANAM":  { english: "Greetings", hindi: "प्रणाम" },
+      "LETS GO": { english: "Let's go!", hindi: "चलो!" },
+      "NO":      { english: "No", hindi: "नहीं" }
+    };
+
+    const video = document.getElementById("camera");
+    const photoPreview = document.getElementById("photo-preview");
+    const photoInput = document.getElementById("photo-input");
+    const placeholder = document.getElementById("camera-placeholder");
+    const statusText = document.getElementById("status");
+    const startButton = document.getElementById("start-button");
+    const uploadButton = document.getElementById("upload-button");
+    const stopButton = document.getElementById("stop-button");
+    const autoSpeak = document.getElementById("auto-speak");
+    const speakButton = document.getElementById("speak-button");
+    const voiceTestButton = document.getElementById("voice-test-button");
+    const gestureName = document.getElementById("gesture-name");
+    const englishText = document.getElementById("english-text");
+    const hindiText = document.getElementById("hindi-text");
+    const confidenceText = document.getElementById("confidence");
+    const confidenceBar = document.getElementById("confidence-bar");
+
+    let model = null;
+    let cameraStream = null;
+    let cameraIsRunning = false;
+    let predictionTimer = null;
+    let photoObjectUrl = null;
+    let candidateLabel = "";
+    let candidateFrames = 0;
+    let currentLabel = "";
+
+    const CONFIDENCE_NEEDED = 0.72;
+    const STEADY_FRAMES_NEEDED = 3;
+    const CHECK_AGAIN_MS = 160;
+
+    function setStatus(message, kind) {
+      statusText.textContent = message;
+      statusText.className = "status" + (kind ? " " + kind : "");
+    }
+
+    function makeUtterance(text, language) {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = language;
+      utterance.rate = 0.92;
+      utterance.pitch = 1;
+      return utterance;
+    }
+
+    function speakBilingual(english, hindi) {
+      if (!("speechSynthesis" in window) || !english || !hindi) {
+        setStatus("Speech is not available in this browser. / इस browser में आवाज़ उपलब्ध नहीं है।", "error");
+        return;
+      }
+
+      // The browser speaks queued utterances in order: English first, Hindi second.
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(makeUtterance(english, "en-IN"));
+      window.speechSynthesis.speak(makeUtterance(hindi, "hi-IN"));
+    }
+
+    function speakCurrentPrediction() {
+      if (!currentLabel || !MESSAGES[currentLabel]) return;
+      const message = MESSAGES[currentLabel];
+      speakBilingual(message.english, message.hindi);
+    }
+
+    function showPrediction(label, probability, shouldAutoSpeak) {
+      const message = MESSAGES[label];
+      if (!message) {
+        gestureName.textContent = label;
+        englishText.textContent = "This class is not mapped yet.";
+        hindiText.textContent = "इस संकेत का संदेश अभी नहीं जोड़ा गया है।";
+        return;
+      }
+
+      currentLabel = label;
+      gestureName.textContent = label;
+      englishText.textContent = message.english;
+      hindiText.textContent = message.hindi;
+      confidenceText.textContent = Math.round(probability * 100) + "%";
+      confidenceBar.style.width = Math.round(probability * 100) + "%";
+      speakButton.disabled = false;
+
+      // Speak once for a new steady live gesture, or once for each uploaded photo.
+      if (shouldAutoSpeak && autoSpeak.checked) speakCurrentPrediction();
+      setStatus("Gesture found. / संकेत पहचान लिया।", "good");
+    }
+
+    function showUnclearPhoto(probability) {
+      currentLabel = "";
+      gestureName.textContent = "Not sure / स्पष्ट नहीं";
+      englishText.textContent = "Try a clearer photo.";
+      hindiText.textContent = "कृपया साफ़ फोटो चुनें।";
+      confidenceText.textContent = Math.round(probability * 100) + "%";
+      confidenceBar.style.width = Math.round(probability * 100) + "%";
+      speakButton.disabled = true;
+      setStatus("The photo was unclear. Choose another one. / फोटो साफ़ नहीं थी। दूसरी फोटो चुनें।", "error");
+    }
+
+    async function loadModelIfNeeded() {
+      if (model) return;
+      if (!window.tmImage) {
+        throw new Error("The model library did not load. Check your internet connection and refresh.");
+      }
+
+      setStatus("Loading your model… / आपका model लोड हो रहा है…");
+      model = await tmImage.load(MODEL_URL + "model.json", MODEL_URL + "metadata.json");
+
+      const modelLabels = model.getClassLabels();
+      const expectedLabels = Object.keys(MESSAGES);
+      const missingLabels = expectedLabels.filter(function (label) {
+        return modelLabels.indexOf(label) === -1;
+      });
+
+      if (missingLabels.length > 0 || modelLabels.length !== expectedLabels.length) {
+        model = null;
+        throw new Error("Model labels do not match this page. Found: " + modelLabels.join(", "));
+      }
+    }
+
+    function clearPhotoPreview() {
+      photoPreview.hidden = true;
+      photoPreview.removeAttribute("src");
+      if (photoObjectUrl) {
+        URL.revokeObjectURL(photoObjectUrl);
+        photoObjectUrl = null;
+      }
+    }
+
+    function resetPrediction() {
+      currentLabel = "";
+      candidateLabel = "";
+      candidateFrames = 0;
+      gestureName.textContent = "Show or choose a gesture / संकेत दिखाएँ या फोटो चुनें";
+      englishText.textContent = "Waiting for a gesture…";
+      hindiText.textContent = "संकेत की प्रतीक्षा…";
+      confidenceText.textContent = "—";
+      confidenceBar.style.width = "0";
+      speakButton.disabled = true;
+    }
+
+    async function startCamera() {
+      if (cameraIsRunning) return;
+
+      startButton.disabled = true;
+      uploadButton.disabled = true;
+      clearPhotoPreview();
+      resetPrediction();
+
+      try {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          throw new Error("Camera needs HTTPS (or localhost). Open this page from a secure website.");
+        }
+
+        await loadModelIfNeeded();
+        setStatus("Asking for camera permission… / कैमरा अनुमति माँगी जा रही है…");
+        cameraStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: "user" } },
+          audio: false
+        });
+
+        video.srcObject = cameraStream;
+        video.hidden = false;
+        placeholder.hidden = true;
+        await video.play();
+
+        cameraIsRunning = true;
+        uploadButton.disabled = false;
+        stopButton.disabled = false;
+        setStatus("Camera is on. Hold one gesture steady. / कैमरा चालू है। एक संकेत स्थिर रखें।", "good");
+        predictNextFrame();
+      } catch (error) {
+        stopCamera(false);
+        placeholder.hidden = false;
+        startButton.disabled = false;
+        uploadButton.disabled = false;
+        if (error.name === "NotAllowedError" || error.name === "PermissionDeniedError") {
+          setStatus("Camera permission was blocked. Allow camera access, then try again. / कैमरा अनुमति नहीं मिली। अनुमति देकर फिर कोशिश करें।", "error");
+        } else {
+          setStatus(error.message || "Could not start the camera. / कैमरा शुरू नहीं हो सका।", "error");
+        }
+      }
+    }
+
+    async function predictNextFrame() {
+      if (!cameraIsRunning) return;
+
+      try {
+        const predictions = await model.predict(video);
+        let best = predictions[0];
+        for (let i = 1; i < predictions.length; i++) {
+          if (predictions[i].probability > best.probability) best = predictions[i];
+        }
+
+        if (best.probability >= CONFIDENCE_NEEDED) {
+          if (best.className === candidateLabel) {
+            candidateFrames += 1;
+          } else {
+            candidateLabel = best.className;
+            candidateFrames = 1;
+          }
+
+          if (candidateFrames >= STEADY_FRAMES_NEEDED && best.className !== currentLabel) {
+            showPrediction(best.className, best.probability, true);
+          } else if (best.className === currentLabel) {
+            confidenceText.textContent = Math.round(best.probability * 100) + "%";
+            confidenceBar.style.width = Math.round(best.probability * 100) + "%";
+          }
+        } else {
+          candidateLabel = "";
+          candidateFrames = 0;
+          if (!currentLabel) {
+            setStatus("Move your hand into view and hold a gesture. / हाथ दिखाएँ और संकेत स्थिर रखें।");
+          }
+        }
+      } catch (error) {
+        stopCamera(false);
+        placeholder.hidden = false;
+        startButton.disabled = false;
+        uploadButton.disabled = false;
+        setStatus("Prediction stopped. Tap Live translation to try again. / पहचान रुक गई। फिर से Live translation दबाएँ।", "error");
+        return;
+      }
+
+      if (cameraIsRunning) {
+        predictionTimer = window.setTimeout(predictNextFrame, CHECK_AGAIN_MS);
+      }
+    }
+
+    async function predictUploadedPhoto(file) {
+      if (!file.type || !file.type.startsWith("image/")) {
+        photoInput.value = "";
+        setStatus("Choose an image file such as JPG or PNG. / JPG या PNG जैसी image file चुनें।", "error");
+        return;
+      }
+
+      uploadButton.disabled = true;
+      startButton.disabled = true;
+      stopCamera(false);
+      resetPrediction();
+      video.hidden = true;
+      clearPhotoPreview();
+      placeholder.hidden = true;
+      setStatus("Loading photo and model… / फोटो और model लोड हो रहे हैं…");
+
+      try {
+        await loadModelIfNeeded();
+
+        const photoLoaded = new Promise(function (resolve, reject) {
+          photoPreview.onload = resolve;
+          photoPreview.onerror = function () { reject(new Error("This photo could not be opened.")); };
+          photoObjectUrl = URL.createObjectURL(file);
+          photoPreview.src = photoObjectUrl;
+          photoPreview.hidden = false;
+        });
+        await photoLoaded;
+
+        const predictions = await model.predict(photoPreview);
+        let best = predictions[0];
+        for (let i = 1; i < predictions.length; i++) {
+          if (predictions[i].probability > best.probability) best = predictions[i];
+        }
+
+        if (best.probability >= CONFIDENCE_NEEDED) {
+          showPrediction(best.className, best.probability, true);
+          setStatus("Photo checked. / फोटो जाँच ली गई।", "good");
+        } else {
+          showUnclearPhoto(best.probability);
+        }
+      } catch (error) {
+        clearPhotoPreview();
+        placeholder.hidden = false;
+        setStatus(error.message || "Could not read that photo. / फोटो नहीं खुली।", "error");
+      } finally {
+        startButton.disabled = false;
+        uploadButton.disabled = false;
+        photoInput.value = "";
+      }
+    }
+    function stopCamera(showMessage) {
+      cameraIsRunning = false;
+      window.clearTimeout(predictionTimer);
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(function (track) { track.stop(); });
+        cameraStream = null;
+      }
+
+      video.srcObject = null;
+      video.hidden = true;
+      stopButton.disabled = true;
+      candidateLabel = "";
+      candidateFrames = 0;
+
+      if (showMessage) {
+        clearPhotoPreview();
+        placeholder.hidden = false;
+        setStatus("Live translation stopped. / लाइव अनुवाद रोक दिया गया।");
+      }
+    }
+
+    startButton.addEventListener("click", startCamera);
+    stopButton.addEventListener("click", function () { stopCamera(true); });
+    uploadButton.addEventListener("click", function () { photoInput.click(); });
+    photoInput.addEventListener("change", function () {
+      const file = photoInput.files && photoInput.files[0];
+      if (file) predictUploadedPhoto(file);
+    });
+    speakButton.addEventListener("click", speakCurrentPrediction);
+    voiceTestButton.addEventListener("click", function () {
+      speakBilingual("Voice is ready", "आवाज़ तैयार है");
+    });
+  </script>
+</body>
+</html>
+
+
